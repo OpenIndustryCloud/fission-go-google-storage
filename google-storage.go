@@ -9,21 +9,25 @@
 package main
 
 import (
-	"encoding/hex"
+	"context"
 	"encoding/json"
 	"io"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
-	"os"
-
-	"golang.org/x/net/context"
+	"time"
 
 	"cloud.google.com/go/storage"
 )
 
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
 var (
-	bucket = "beta-claim-data" //default
+	letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	bucketId    = "artifacts-image" //default
 )
 
 func main() {
@@ -34,118 +38,155 @@ func main() {
 
 func Handler(w http.ResponseWriter, r *http.Request) {
 
-	// bucketID := os.Getenv("GOOGLE_BUCKET_ID")
+	println("In Google Storage APP")
+	// bucketID := os.Getenvgo("GOOGLE_BUCKET_ID")
 	// if bucketID == "" {
 	// 	println("GOOGLE_BUCKET_ID environment variable must be set.\n")
 	// }
 
 	//Marhsal TYPE FORM DATA to TypeFormData struct
-	var tranformedData = TranformedData{}
+	var tranformedData TranformedData
 	err := json.NewDecoder(r.Body).Decode(&tranformedData)
 	if err == io.EOF || err != nil {
 		createErrorResponse(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	//create a client:
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	mediaBucket := MediaBucket{}
 	//Storm Claim Data
-	if tranformedData.StromClaimData.DamageImageURL1 != "" {
-		if err := write(client, bucket,
-			hex.EncodeToString([]byte(tranformedData.StromClaimData.DamageImageURL1)),
-			tranformedData.StromClaimData.DamageImageURL1); err != nil {
-			log.Fatalf("Cannot write object: %v", err)
+	if (StromClaimData{}) != tranformedData.StromClaimData {
+		if imgURL := tranformedData.StromClaimData.DamageImageURL1; imgURL != "" {
+			if media, err := write(client, bucketId,
+				RandStringRunes(10), imgURL); err == nil {
+				mediaBucket.addAttachment(media)
+			}
 		}
-	}
-	if tranformedData.StromClaimData.DamageImageURL2 != "" {
-		if err := write(client, bucket,
-			hex.EncodeToString([]byte(tranformedData.StromClaimData.DamageImageURL2)),
-			tranformedData.StromClaimData.DamageImageURL2); err != nil {
-			log.Fatalf("Cannot write object: %v", err)
+		if imgURL := tranformedData.StromClaimData.DamageImageURL2; imgURL != "" {
+			if media, err := write(client, bucketId,
+				RandStringRunes(10), imgURL); err == nil {
+				mediaBucket.addAttachment(media)
+			}
 		}
-	}
-	if tranformedData.StromClaimData.DamageVideoURL != "" {
-		if err := write(client, bucket,
-			hex.EncodeToString([]byte(tranformedData.StromClaimData.DamageVideoURL)),
-			tranformedData.StromClaimData.DamageVideoURL); err != nil {
-			log.Fatalf("Cannot write object: %v", err)
+		if imgURL := tranformedData.StromClaimData.DamageVideoURL; imgURL != "" {
+			if media, err := write(client, bucketId,
+				RandStringRunes(10), imgURL); err == nil {
+				mediaBucket.addAttachment(media)
+			}
 		}
 	}
 	//TV Claim Data
-	if tranformedData.TVClaimData.DamageImageURL1 != "" {
-		if err := write(client, bucket,
-			hex.EncodeToString([]byte(tranformedData.TVClaimData.DamageImageURL1)),
-			tranformedData.StromClaimData.DamageImageURL1); err != nil {
-			log.Fatalf("Cannot write object: %v", err)
+	if (TVClaimData{}) != tranformedData.TVClaimData {
+		if imgURL := tranformedData.TVClaimData.DamageImageURL1; imgURL != "" {
+			if media, err := write(client, bucketId,
+				RandStringRunes(10), imgURL); err == nil {
+				mediaBucket.addAttachment(media)
+			}
 		}
-	}
-	if tranformedData.TVClaimData.DamageImageURL2 != "" {
-		if err := write(client, bucket,
-			hex.EncodeToString([]byte(tranformedData.TVClaimData.DamageImageURL2)),
-			tranformedData.StromClaimData.DamageImageURL2); err != nil {
-			log.Fatalf("Cannot write object: %v", err)
+		if imgURL := tranformedData.TVClaimData.DamageImageURL2; imgURL != "" {
+			if media, err := write(client, bucketId,
+				RandStringRunes(10), imgURL); err == nil {
+				mediaBucket.addAttachment(media)
+			}
 		}
-	}
-	if tranformedData.TVClaimData.TVReceiptImage != "" {
-		if err := write(client, bucket,
-			hex.EncodeToString([]byte(tranformedData.TVClaimData.TVReceiptImage)),
-			tranformedData.TVClaimData.TVReceiptImage); err != nil {
-			log.Fatalf("Cannot write object: %v", err)
+		if imgURL := tranformedData.TVClaimData.TVReceiptImage; imgURL != "" {
+			if media, err := write(client, bucketId,
+				RandStringRunes(10), imgURL); err == nil {
+				mediaBucket.addAttachment(media)
+			}
 		}
 	}
 
-	// switch operation {
-	// case "write":
-	// 	if err := write(client, bucket, object, url); err != nil {
-	// 		log.Fatalf("Cannot write object: %v", err)
-	// 	}
-	// case "read":
-	// 	data, err := read(client, bucket, object)
-	// 	if err != nil {
-	// 		log.Fatalf("Cannot read object: %v", err)
-	// 	}
-	// 	fmt.Printf("Object contents: %s\n", data)
-	// case "metadata":
-	// 	attrs, err := attrs(client, bucket, object)
-	// 	if err != nil {
-	// 		log.Fatalf("Cannot get object metadata: %v", err)
-	// 	}
-	// 	fmt.Printf("Object metadata: %v\n", attrs)
-	// case "makepublic":
-	// 	if err := makePublic(client, bucket, object); err != nil {
-	// 		log.Fatalf("Cannot to make object public: %v", err)
-	// 	}
-	// case "delete":
-	// 	if err := delete(client, bucket, object); err != nil {
-	// 		log.Fatalf("Cannot to delete object: %v", err)
-	// 	}
-	// }
+	//add status 200 if no error
+	if len(mediaBucket.Media) != 0 {
+		mediaBucket.Status = 200
+	} else {
+		createErrorResponse(w, "No data Uploaded", http.StatusBadRequest)
+	}
 
+	//marshal to JSON
+	mediaBucketJSON, err := json.Marshal(mediaBucket)
+	if err != nil {
+		createErrorResponse(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	println("Google Storage APP output : ", string(mediaBucketJSON))
+
+	w.Header().Set("content-type", "application/json")
+	w.Write([]byte(string(mediaBucketJSON)))
 }
 
-func write(client *storage.Client, bucket, object string, url string) error {
+func RandStringRunes(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}
+
+func write(client *storage.Client, bucket, objectName string, url string) (Media, error) {
+	println("writing media to cloud storage")
 	ctx := context.Background()
 	// [START upload_file]
 	resp, err := http.Get(url)
-	f, err := os.Open("README.md")
 	if err != nil {
-		return err
+		return Media{}, err
 	}
-	defer f.Close()
 
-	wc := client.Bucket(bucket).Object(object).NewWriter(ctx)
+	obj := client.Bucket(bucket).Object(objectName)
+	wc := obj.NewWriter(ctx)
 	if _, err = io.Copy(wc, resp.Body); err != nil {
-		return err
+		return Media{}, err
 	}
+	// Close, just like writing a file.
 	if err := wc.Close(); err != nil {
-		return err
+		return Media{}, err
 	}
-	// [END upload_file]
-	return nil
+
+	//Make Object Public
+	acl := obj.ACL()
+	if err := acl.Set(ctx, storage.AllUsers, storage.RoleReader); err != nil {
+		return Media{}, err
+	}
+
+	//read attribute
+	objAttrs, err := obj.Attrs(ctx)
+	if err != nil {
+		return Media{}, err
+	}
+	println("object %s has size %d and can be read using %s\n",
+		objAttrs.Name, objAttrs.Size, objAttrs.MediaLink)
+
+	return Media{
+		objAttrs.Bucket,
+		objAttrs.Name,
+		objAttrs.Size,
+		objAttrs.MediaLink,
+		url,
+	}, err
+}
+
+type MediaBucket struct {
+	Status int     `json:"status,omitempty"`
+	Media  []Media `json:"media,omitempty"`
+}
+
+type Media struct {
+	Bucket       string `json:"bucket,omitempty"`
+	Name         string `json:"name,omitempty"`
+	Size         int64  `json:"size,omitempty"`
+	MediaLink    string `json:"media-link,omitempty"`
+	OriginalLink string `json:"original-link,omitempty"`
+}
+
+func (mediaBucket *MediaBucket) addAttachment(media Media) {
+	mediaBucket.Media = append(mediaBucket.Media, media)
 }
 
 func read(client *storage.Client, bucket, object string) ([]byte, error) {
