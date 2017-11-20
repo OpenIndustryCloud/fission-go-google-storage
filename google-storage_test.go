@@ -20,7 +20,7 @@ var (
 func TestHandler(t *testing.T) {
 	//Convert string to reader
 	readerTV := strings.NewReader(userJsonTVClaim)
-	//Create request with JSON body
+	//Create request with JSclearON body
 	reqTV, err := http.NewRequest("POST", "", readerTV)
 	// empty request
 	//reqEmpty, err := http.NewRequest("POST", "", strings.NewReader(""))

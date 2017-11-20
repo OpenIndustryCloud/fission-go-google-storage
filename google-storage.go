@@ -33,10 +33,10 @@ func init() {
 var (
 	letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	bucketId    = "artifacts-image" //default
-	namesapce   = "fission-function"
-	secretName  = "fission-envs-credential"
+	namespace   = "fission-function"
+	secretName  = "fission-envs-credentials"
 	apiKey      = []byte("")
-	path        = "/etc/fission"
+	path        = "/tmp/fission"
 	fileName    = "google-credentials.conf"
 	googleENV   = "GOOGLE_APPLICATION_CREDENTIALS"
 )
@@ -208,11 +208,11 @@ func getAPIKeys(w http.ResponseWriter) {
 		//panic(err)
 	}
 
-	secret, err := clientset.Core().Secrets(namesapce).Get(secretName, meta_v1.GetOptions{})
-	println(string(secret.Data["google-credential.conf"]))
+	secret, err := clientset.Core().Secrets(namespace).Get(secretName, meta_v1.GetOptions{})
+	//println(string(secret.Data[fileName]))
 
 	//endPointFromENV := os.Getenv("ENV_HELPDESK_API_EP")
-	apiKey = secret.Data["google-credential.conf"]
+	apiKey = secret.Data[fileName]
 
 	if len(apiKey) == 0 {
 		createErrorResponse(w, "Missing API Key", http.StatusBadRequest)
