@@ -23,7 +23,7 @@ func TestHandler(t *testing.T) {
 	//Create request with JSON body
 	reqTV, err := http.NewRequest("POST", "", readerTV)
 	// empty request
-	reqEmpty, err := http.NewRequest("POST", "", strings.NewReader(""))
+	//reqEmpty, err := http.NewRequest("POST", "", strings.NewReader(""))
 
 	if err != nil {
 		t.Error(err) //Something is wrong while sending request
@@ -41,7 +41,7 @@ func TestHandler(t *testing.T) {
 		args args
 	}{
 		{"Status200TV", args{rr, reqTV}},
-		{"Status200Storm", args{rr, reqEmpty}},
+		//{"Status200Storm", args{rr, reqEmpty}},
 	}
 	for _, tt := range tests {
 		// call ServeHTTP method

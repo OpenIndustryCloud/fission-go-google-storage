@@ -11,14 +11,19 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"time"
 
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"cloud.google.com/go/storage"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 func init() {
@@ -28,7 +33,16 @@ func init() {
 var (
 	letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	bucketId    = "artifacts-image" //default
+	namesapce   = "fission-function"
+	secretName  = "fission-envs-credential"
+	apiKey      = []byte("")
+	path        = "/etc/fission"
+	fileName    = "google-credentials.conf"
 )
+
+func init() {
+
+}
 
 func main() {
 	println("staritng app..")
@@ -36,27 +50,70 @@ func main() {
 	http.ListenAndServe(":8083", nil)
 }
 
+func hasError(w http.ResponseWriter, err error) {
+	if err == io.EOF || err != nil {
+		createErrorResponse(w, err.Error(), http.StatusBadRequest)
+		panic(err)
+	}
+}
+
+func createFile(w http.ResponseWriter) (fp *os.File) {
+	// detect if file exists
+	var file *os.File
+	var _, err = os.Stat(path)
+
+	// create file if not exists
+	if os.IsNotExist(err) {
+		//path := "/home/akvarman/test"
+		err = os.MkdirAll(path, 0644)
+		file, err = os.Create(path + "/" + fileName)
+		hasError(w, err)
+		defer fp.Close()
+	}
+
+	println("==> done creating file", path)
+	return file
+}
+
+func isError(err error) bool {
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	return (err != nil)
+}
+
 func Handler(w http.ResponseWriter, r *http.Request) {
 
-	println("In Google Storage APP")
-	// bucketID := os.Getenvgo("GOOGLE_BUCKET_ID")
-	// if bucketID == "" {
-	// 	println("GOOGLE_BUCKET_ID environment variable must be set.\n")
-	// }
+	println("In Google Storage APP....")
+
+	//grap credential
+	getAPIKeys(w)
+
+	//create file
+	f := createFile(w)
+	//write this to a file
+	n, err := f.Write(apiKey)
+	f.Close()
+	hasError(w, err)
+	println("wrote %d bytes\n", n)
+
+	//set this to environmet variable
+	os.Setenv("GOOGLE_APPLICATION_credential", path)
 
 	//Marhsal TYPE FORM DATA to TypeFormData struct
 	var tranformedData TranformedData
-	err := json.NewDecoder(r.Body).Decode(&tranformedData)
+	err = json.NewDecoder(r.Body).Decode(&tranformedData)
 	if err == io.EOF || err != nil {
 		createErrorResponse(w, err.Error(), http.StatusBadRequest)
-		return
+		panic(err)
 	}
 
 	//create a client:
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
 	if err != nil {
-		log.Fatal(err)
+		createErrorResponse(w, err.Error(), http.StatusBadRequest)
+		panic(err)
 	}
 
 	mediaBucket := MediaBucket{}
@@ -108,18 +165,47 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		mediaBucket.Status = 200
 	} else {
 		createErrorResponse(w, "No data Uploaded", http.StatusBadRequest)
+		panic(err)
 	}
 
 	//marshal to JSON
 	mediaBucketJSON, err := json.Marshal(mediaBucket)
 	if err != nil {
 		createErrorResponse(w, err.Error(), http.StatusBadRequest)
-		return
+		panic(err)
 	}
 	println("Google Storage APP output : ", string(mediaBucketJSON))
 
 	w.Header().Set("content-type", "application/json")
 	w.Write([]byte(string(mediaBucketJSON)))
+}
+
+func getAPIKeys(w http.ResponseWriter) {
+	println("[CONFIG] Reading Env variables")
+
+	// creates the in-cluster config
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		createErrorResponse(w, err.Error(), http.StatusBadRequest)
+		panic(err)
+	}
+	// creates the clientset
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		createErrorResponse(w, err.Error(), http.StatusBadRequest)
+		panic(err)
+	}
+
+	secret, err := clientset.Core().Secrets(namesapce).Get(secretName, meta_v1.GetOptions{})
+	println(string(secret.Data["google-credential.conf"]))
+
+	//endPointFromENV := os.Getenv("ENV_HELPDESK_API_EP")
+	apiKey = secret.Data["google-credential.conf"]
+
+	if len(apiKey) == 0 {
+		createErrorResponse(w, "Missing API Key", http.StatusBadRequest)
+	}
+
 }
 
 func RandStringRunes(n int) string {
