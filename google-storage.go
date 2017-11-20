@@ -38,6 +38,7 @@ var (
 	apiKey      = []byte("")
 	path        = "/etc/fission"
 	fileName    = "google-credentials.conf"
+	googleENV   = "GOOGLE_APPLICATION_CREDENTIALS"
 )
 
 func init() {
@@ -50,62 +51,18 @@ func main() {
 	http.ListenAndServe(":8083", nil)
 }
 
-func hasError(w http.ResponseWriter, err error) {
-	if err == io.EOF || err != nil {
-		createErrorResponse(w, err.Error(), http.StatusBadRequest)
-		panic(err)
-	}
-}
-
-func createFile(w http.ResponseWriter) (fp *os.File) {
-	// detect if file exists
-	var file *os.File
-	var _, err = os.Stat(path)
-
-	// create file if not exists
-	if os.IsNotExist(err) {
-		//path := "/home/akvarman/test"
-		err = os.MkdirAll(path, 0644)
-		file, err = os.Create(path + "/" + fileName)
-		hasError(w, err)
-		defer fp.Close()
-	}
-
-	println("==> done creating file", path)
-	return file
-}
-
-func isError(err error) bool {
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-	return (err != nil)
-}
-
 func Handler(w http.ResponseWriter, r *http.Request) {
 
 	println("In Google Storage APP....")
 
-	//grap credential
-	getAPIKeys(w)
-
-	//create file
-	f := createFile(w)
-	//write this to a file
-	n, err := f.Write(apiKey)
-	f.Close()
-	hasError(w, err)
-	println("wrote %d bytes\n", n)
-
-	//set this to environmet variable
-	os.Setenv("GOOGLE_APPLICATION_credential", path)
+	createCertificateFile(w)
 
 	//Marhsal TYPE FORM DATA to TypeFormData struct
 	var tranformedData TranformedData
-	err = json.NewDecoder(r.Body).Decode(&tranformedData)
+	err := json.NewDecoder(r.Body).Decode(&tranformedData)
 	if err == io.EOF || err != nil {
 		createErrorResponse(w, err.Error(), http.StatusBadRequest)
-		panic(err)
+		//panic(err)
 	}
 
 	//create a client:
@@ -113,7 +70,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	client, err := storage.NewClient(ctx)
 	if err != nil {
 		createErrorResponse(w, err.Error(), http.StatusBadRequest)
-		panic(err)
+		//panic(err)
 	}
 
 	mediaBucket := MediaBucket{}
@@ -165,19 +122,74 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		mediaBucket.Status = 200
 	} else {
 		createErrorResponse(w, "No data Uploaded", http.StatusBadRequest)
-		panic(err)
+		//panic(err)
 	}
 
 	//marshal to JSON
 	mediaBucketJSON, err := json.Marshal(mediaBucket)
 	if err != nil {
 		createErrorResponse(w, err.Error(), http.StatusBadRequest)
-		panic(err)
+		//panic(err)
 	}
 	println("Google Storage APP output : ", string(mediaBucketJSON))
 
 	w.Header().Set("content-type", "application/json")
 	w.Write([]byte(string(mediaBucketJSON)))
+}
+
+func createCertificateFile(w http.ResponseWriter) {
+	// detect if file exists
+	var file *os.File
+	fullPath := path + "/" + fileName
+	//if os.IsNotExist(err) {
+
+	println("creating new file...")
+	//path := "/home/akvarman/test"
+	err := os.MkdirAll(path, 0777)
+	hasError(w, err)
+	file, err = os.Create(fullPath)
+	hasError(w, err)
+	println("file created at : ", fullPath)
+
+	err = os.Chmod(fullPath, 0777)
+	hasError(w, err)
+	//get kubernetes secrets
+	getAPIKeys(w)
+	//write this to a file
+	println("apikey ", string(apiKey))
+	err = ioutil.WriteFile(fullPath, apiKey, 0777)
+	//_, err := file.Write(apiKey)
+	hasError(w, err)
+	defer file.Close()
+	//set this to environmet variable
+
+	//check if file is written correctly
+	fileInfo, err := os.Stat(fullPath)
+
+	// delete file if exists
+	if fileInfo != nil {
+		println("File name:", fileInfo.Name())
+		println("Size in bytes:", fileInfo.Size())
+		println("Permissions:", fileInfo.Mode())
+		println("Is Directory: ", fileInfo.IsDir())
+		println("System interface type: %T\n", fileInfo.Sys())
+		println("System info: %+v\n\n", fileInfo.Sys())
+		//if fileInfo.Size() == 0 {
+		//err := os.Remove("test.txt")
+		// n3, err := file.WriteString(string(apiKey))
+		// println("wrote %d bytes", n3)
+		// if err != nil {
+		// 	println("empty file exist - unable to delete ")
+		// }
+		//}
+	}
+
+	if os.Getenv(googleENV) != fullPath {
+		println("setting env variable to ", fullPath)
+		os.Setenv(googleENV, fullPath)
+	}
+	//}
+
 }
 
 func getAPIKeys(w http.ResponseWriter) {
@@ -187,13 +199,13 @@ func getAPIKeys(w http.ResponseWriter) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		createErrorResponse(w, err.Error(), http.StatusBadRequest)
-		panic(err)
+		//panic(err)
 	}
 	// creates the clientset
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		createErrorResponse(w, err.Error(), http.StatusBadRequest)
-		panic(err)
+		//panic(err)
 	}
 
 	secret, err := clientset.Core().Secrets(namesapce).Get(secretName, meta_v1.GetOptions{})
@@ -246,7 +258,7 @@ func write(client *storage.Client, bucket, objectName string, url string) (Media
 	if err != nil {
 		return Media{}, err
 	}
-	println("object %s has size %d and can be read using %s\n",
+	fmt.Printf("object %s has size %d and can be read using %s\n",
 		objAttrs.Name, objAttrs.Size, objAttrs.MediaLink)
 
 	return Media{
@@ -334,6 +346,13 @@ func createErrorResponse(w http.ResponseWriter, message string, status int) {
 	w.WriteHeader(status)
 	w.Header().Set("content-type", "application/json")
 	w.Write([]byte(errorJSON))
+}
+
+func hasError(w http.ResponseWriter, err error) {
+	if err == io.EOF || err != nil {
+		createErrorResponse(w, err.Error(), http.StatusBadRequest)
+		//panic(err)
+	}
 }
 
 type Error struct {
