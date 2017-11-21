@@ -36,7 +36,7 @@ var (
 	namespace   = "fission-function"
 	secretName  = "fission-envs-credentials"
 	apiKey      = []byte("")
-	path        = "/tmp/fission"
+	path        = "/tmp"
 	fileName    = "google-credentials.conf"
 	googleENV   = "GOOGLE_APPLICATION_CREDENTIALS"
 )
@@ -209,7 +209,7 @@ func getAPIKeys(w http.ResponseWriter) {
 	}
 
 	secret, err := clientset.Core().Secrets(namespace).Get(secretName, meta_v1.GetOptions{})
-	//println(string(secret.Data[fileName]))
+	println(string(secret.Data[fileName]))
 
 	//endPointFromENV := os.Getenv("ENV_HELPDESK_API_EP")
 	apiKey = secret.Data[fileName]
@@ -258,7 +258,7 @@ func write(client *storage.Client, bucket, objectName string, url string) (Media
 	if err != nil {
 		return Media{}, err
 	}
-	fmt.Printf("object %s has size %d and can be read using %s\n",
+	println("object %s has size %d and can be read using %s\n",
 		objAttrs.Name, objAttrs.Size, objAttrs.MediaLink)
 
 	return Media{
