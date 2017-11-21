@@ -1,7 +1,3 @@
-// Copyright 2016 Google Inc. All rights reserved.
-// Use of this source code is governed by the Apache 2.0
-// license that can be found in the LICENSE file.
-
 // Sample objects creates, list, deletes objects and runs
 // other similar operations on them by using the Google Storage API.
 // More documentation is available at
@@ -11,7 +7,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -32,7 +27,7 @@ func init() {
 
 var (
 	letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	bucketId    = "artifacts-image" //default
+	bucketId    = "artifacts-image"
 	namespace   = "fission-function"
 	secretName  = "fission-envs-credentials"
 	apiKey      = []byte("")
@@ -143,7 +138,7 @@ func createCertificateFile(w http.ResponseWriter) {
 	fullPath := path + "/" + fileName
 	//if os.IsNotExist(err) {
 
-	println("creating new file...")
+	println("creating new file... fullpath", fullPath)
 	//path := "/home/akvarman/test"
 	err := os.MkdirAll(path, 0777)
 	hasError(w, err)
@@ -156,7 +151,7 @@ func createCertificateFile(w http.ResponseWriter) {
 	//get kubernetes secrets
 	getAPIKeys(w)
 	//write this to a file
-	println("apikey ", string(apiKey))
+	println("content to be written on file ", string(apiKey))
 	err = ioutil.WriteFile(fullPath, apiKey, 0777)
 	//_, err := file.Write(apiKey)
 	hasError(w, err)
@@ -212,8 +207,9 @@ func getAPIKeys(w http.ResponseWriter) {
 	println(string(secret.Data[fileName]))
 
 	//endPointFromENV := os.Getenv("ENV_HELPDESK_API_EP")
+	println("secrets data name : ", fileName)
 	apiKey = secret.Data[fileName]
-
+	println("secrets content : ", apiKey)
 	if len(apiKey) == 0 {
 		createErrorResponse(w, "Missing API Key", http.StatusBadRequest)
 	}
@@ -229,7 +225,7 @@ func RandStringRunes(n int) string {
 }
 
 func write(client *storage.Client, bucket, objectName string, url string) (Media, error) {
-	println("writing media to cloud storage")
+	println("writing media to cloud storage", objectName)
 	ctx := context.Background()
 	// [START upload_file]
 	resp, err := http.Get(url)
@@ -252,7 +248,7 @@ func write(client *storage.Client, bucket, objectName string, url string) (Media
 	if err := acl.Set(ctx, storage.AllUsers, storage.RoleReader); err != nil {
 		return Media{}, err
 	}
-
+	println("Uploaded to cloud storage", objectName)
 	//read attribute
 	objAttrs, err := obj.Attrs(ctx)
 	if err != nil {
