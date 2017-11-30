@@ -14,6 +14,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/mediocregopher/radix.v2/redis"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"cloud.google.com/go/storage"
@@ -26,14 +27,17 @@ func init() {
 }
 
 var (
-	letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	bucketId    = "artifacts-image"
-	namespace   = "fission-function"
-	secretName  = "fission-envs-credentials"
-	apiKey      = []byte("")
-	path        = "/tmp"
-	fileName    = "google-credentials.conf"
-	googleENV   = "GOOGLE_APPLICATION_CREDENTIALS"
+	letterRunes   = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	bucketId      = "artifacts-image"
+	namespace     = "fission-function"
+	secretName    = "fission-envs-credentials"
+	apiKey        = []byte("")
+	path          = "/tmp"
+	fileName      = "google-credentials.conf"
+	googleENV     = "GOOGLE_APPLICATION_CREDENTIALS"
+	REDIS_SERVER  = "redis-redis.redis.svc.cluster.local:6379"
+	TCP           = "tcp"
+	REDIS_HASH_NS = "-gs"
 )
 
 func init() {
@@ -49,87 +53,118 @@ func main() {
 func Handler(w http.ResponseWriter, r *http.Request) {
 
 	println("In Google Storage APP....")
-
-	createCertificateFile(w)
-
 	//Marhsal TYPE FORM DATA to TypeFormData struct
+	var mediaBucketJSON = []byte("")
 	var tranformedData TranformedData
 	err := json.NewDecoder(r.Body).Decode(&tranformedData)
 	if err == io.EOF || err != nil {
 		createErrorResponse(w, err.Error(), http.StatusBadRequest)
 		//panic(err)
 	}
+	submissionID := tranformedData.TicketDetails.Ticket.EventID + REDIS_HASH_NS
+	if validateRecord(w, submissionID) == 1 {
+		//create certificate file for google api call
+		createCertificateFile(w)
+		//create a client:
+		ctx := context.Background()
+		client, err := storage.NewClient(ctx)
+		if err != nil {
+			createErrorResponse(w, err.Error(), http.StatusBadRequest)
+			//panic(err)
+		}
 
-	//create a client:
-	ctx := context.Background()
-	client, err := storage.NewClient(ctx)
-	if err != nil {
-		createErrorResponse(w, err.Error(), http.StatusBadRequest)
-		//panic(err)
-	}
+		mediaBucket := MediaBucket{}
+		//Storm Claim Data
+		if (StromClaimData{}) != tranformedData.StromClaimData {
+			if imgURL := tranformedData.StromClaimData.DamageImageURL1; imgURL != "" {
+				if media, err := write(client, bucketId,
+					RandStringRunes(10), imgURL); err == nil {
+					mediaBucket.addAttachment(media)
+				}
+			}
+			if imgURL := tranformedData.StromClaimData.DamageImageURL2; imgURL != "" {
+				if media, err := write(client, bucketId,
+					RandStringRunes(10), imgURL); err == nil {
+					mediaBucket.addAttachment(media)
+				}
+			}
+			if imgURL := tranformedData.StromClaimData.DamageVideoURL; imgURL != "" {
+				if media, err := write(client, bucketId,
+					RandStringRunes(10), imgURL); err == nil {
+					mediaBucket.addAttachment(media)
+				}
+			}
+		}
+		//TV Claim Data
+		if (TVClaimData{}) != tranformedData.TVClaimData {
+			if imgURL := tranformedData.TVClaimData.DamageImageURL1; imgURL != "" {
+				if media, err := write(client, bucketId,
+					RandStringRunes(10), imgURL); err == nil {
+					mediaBucket.addAttachment(media)
+				}
+			}
+			if imgURL := tranformedData.TVClaimData.DamageImageURL2; imgURL != "" {
+				if media, err := write(client, bucketId,
+					RandStringRunes(10), imgURL); err == nil {
+					mediaBucket.addAttachment(media)
+				}
+			}
+			if imgURL := tranformedData.TVClaimData.TVReceiptImage; imgURL != "" {
+				if media, err := write(client, bucketId,
+					RandStringRunes(10), imgURL); err == nil {
+					mediaBucket.addAttachment(media)
+				}
+			}
+		}
 
-	mediaBucket := MediaBucket{}
-	//Storm Claim Data
-	if (StromClaimData{}) != tranformedData.StromClaimData {
-		if imgURL := tranformedData.StromClaimData.DamageImageURL1; imgURL != "" {
-			if media, err := write(client, bucketId,
-				RandStringRunes(10), imgURL); err == nil {
-				mediaBucket.addAttachment(media)
-			}
+		//add status 200 if no error
+		if len(mediaBucket.Media) != 0 {
+			mediaBucket.Status = 200
+		} else {
+			createErrorResponse(w, "No data Uploaded", http.StatusBadRequest)
+			//panic(err)
 		}
-		if imgURL := tranformedData.StromClaimData.DamageImageURL2; imgURL != "" {
-			if media, err := write(client, bucketId,
-				RandStringRunes(10), imgURL); err == nil {
-				mediaBucket.addAttachment(media)
-			}
-		}
-		if imgURL := tranformedData.StromClaimData.DamageVideoURL; imgURL != "" {
-			if media, err := write(client, bucketId,
-				RandStringRunes(10), imgURL); err == nil {
-				mediaBucket.addAttachment(media)
-			}
-		}
-	}
-	//TV Claim Data
-	if (TVClaimData{}) != tranformedData.TVClaimData {
-		if imgURL := tranformedData.TVClaimData.DamageImageURL1; imgURL != "" {
-			if media, err := write(client, bucketId,
-				RandStringRunes(10), imgURL); err == nil {
-				mediaBucket.addAttachment(media)
-			}
-		}
-		if imgURL := tranformedData.TVClaimData.DamageImageURL2; imgURL != "" {
-			if media, err := write(client, bucketId,
-				RandStringRunes(10), imgURL); err == nil {
-				mediaBucket.addAttachment(media)
-			}
-		}
-		if imgURL := tranformedData.TVClaimData.TVReceiptImage; imgURL != "" {
-			if media, err := write(client, bucketId,
-				RandStringRunes(10), imgURL); err == nil {
-				mediaBucket.addAttachment(media)
-			}
-		}
-	}
 
-	//add status 200 if no error
-	if len(mediaBucket.Media) != 0 {
-		mediaBucket.Status = 200
+		//marshal to JSON
+		mediaBucketJSON, err = json.Marshal(mediaBucket)
+		if err != nil {
+			createErrorResponse(w, err.Error(), http.StatusBadRequest)
+			//panic(err)
+		}
 	} else {
-		createErrorResponse(w, "No data Uploaded", http.StatusBadRequest)
-		//panic(err)
-	}
-
-	//marshal to JSON
-	mediaBucketJSON, err := json.Marshal(mediaBucket)
-	if err != nil {
-		createErrorResponse(w, err.Error(), http.StatusBadRequest)
-		//panic(err)
+		mediaBucketJSON = []byte(`{"status":208,"message":"Image Exist in Storage"}`)
 	}
 	println("Google Storage APP output : ", string(mediaBucketJSON))
 
 	w.Header().Set("content-type", "application/json")
 	w.Write([]byte(string(mediaBucketJSON)))
+}
+
+//this function stores submissionID to Redis DB
+// in a SET, return 1 if inserted , 0 if already exists
+func validateRecord(w http.ResponseWriter, submissionID string) int {
+
+	println("Validating if record exist for submissionID", submissionID)
+
+	if submissionID == REDIS_HASH_NS {
+		return 1 //cannot validate
+	}
+	//conn, err := redis.Dial("tcp", "localhost:6379")
+	conn, err := redis.Dial(TCP, REDIS_SERVER)
+	if err != nil {
+		println("unable to create Redis Connection", err.Error())
+		createErrorResponse(w, err.Error(), http.StatusBadRequest)
+		return 0
+	}
+	defer conn.Close()
+	noOfRecord, err := conn.Cmd("SADD", "submissionID", submissionID).Int()
+	// Check the Err field of the *Resp object for any errors.
+	if err != nil {
+		createErrorResponse(w, err.Error(), http.StatusBadRequest)
+		return 0
+	}
+	println("no of record added to redis DB : ", noOfRecord)
+	return noOfRecord
 }
 
 func createCertificateFile(w http.ResponseWriter) {
@@ -169,14 +204,6 @@ func createCertificateFile(w http.ResponseWriter) {
 		println("Is Directory: ", fileInfo.IsDir())
 		println("System interface type: %T\n", fileInfo.Sys())
 		println("System info: %+v\n\n", fileInfo.Sys())
-		//if fileInfo.Size() == 0 {
-		//err := os.Remove("test.txt")
-		// n3, err := file.WriteString(string(apiKey))
-		// println("wrote %d bytes", n3)
-		// if err != nil {
-		// 	println("empty file exist - unable to delete ")
-		// }
-		//}
 	}
 
 	if os.Getenv(googleENV) != fullPath {
@@ -209,7 +236,7 @@ func getAPIKeys(w http.ResponseWriter) {
 	//endPointFromENV := os.Getenv("ENV_HELPDESK_API_EP")
 	println("secrets data name : ", fileName)
 	apiKey = secret.Data[fileName]
-	println("secrets content : ", apiKey)
+	println("secrets content : ", string(apiKey))
 	if len(apiKey) == 0 {
 		createErrorResponse(w, "Missing API Key", http.StatusBadRequest)
 	}
@@ -358,9 +385,11 @@ type Error struct {
 
 //output data
 type TranformedData struct {
-	Status         int            `json:"status,omitempty"`
-	TVClaimData    TVClaimData    `json:"tv_claim_data,omitempty"`
-	StromClaimData StromClaimData `json:"storm_claim_data,omitempty"`
+	Status          int             `json:"status,omitempty"`
+	TicketDetails   TicketDetails   `json:"ticket_details,omitempty"`
+	WeatherAPIInput WeatherAPIInput `json:"weather_api_input,omitempty"`
+	TVClaimData     TVClaimData     `json:"tv_claim_data,omitempty"`
+	StromClaimData  StromClaimData  `json:"storm_claim_data,omitempty"`
 }
 
 type TVClaimData struct {
@@ -383,4 +412,40 @@ type StromClaimData struct {
 	DamageImageURL2     string `json:"damage_image_url_2,omitempty"`
 	RepairEstimateImage string `json:"estimate_image_url,omitempty"`
 	DamageVideoURL      string `json:"damage_video_url,omitempty"`
+}
+
+type TicketDetails struct {
+	Ticket struct {
+		Type     string `json:"type"`
+		Subject  string `json:"subject"`
+		Priority string `json:"priority"`
+		Status   string `json:"status"`
+		Comment  struct {
+			HTMLBody string   `json:"html_body"`
+			Uploads  []string `json:"uploads,omitempty"`
+		} `json:"comment"`
+		CustomFields []CustomFields `json:"custom_fields,omitempty"`
+		Requester    struct {
+			LocaleID     int    `json:"locale_id"`
+			Name         string `json:"name"`
+			Email        string `json:"email"`
+			Phone        string `json:"phone"`
+			PolicyNumber string `json:"policy_number"`
+		} `json:"requester"`
+		TicketFormID int64     `json:"ticket_form_id"`
+		EventID      string    `json:"event_id"`
+		Token        string    `json:"token"`
+		SubmittedAt  time.Time `json:"submitted_at"`
+	} `json:"ticket"`
+}
+
+type WeatherAPIInput struct {
+	City    string `json:"city,omitempty"`
+	Country string `json:"country,omitempty"`
+	Date    string `json:"date,omitempty"` //YYYYMMDD
+}
+
+type CustomFields struct {
+	ID    int64  `json:"id"`
+	Value string `json:"value"`
 }

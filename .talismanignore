@@ -1,2 +1,3 @@
 ci/collection.json
 form-req-transformer_test.go
+*.so
