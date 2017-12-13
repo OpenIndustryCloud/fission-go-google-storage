@@ -1,4 +1,4 @@
-# Add Risk Data API
+# Google Storage API
 
 API for Google Cloud Storage, to upload objects to your bucket, download objects from your bucket, and remove objects from your bucket
 
