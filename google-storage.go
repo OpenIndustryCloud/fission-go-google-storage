@@ -167,6 +167,7 @@ func validateRecord(w http.ResponseWriter, submissionID string) int {
 	return noOfRecord
 }
 
+// createCertificateFile read kubernetes secret and write the data to the file
 func createCertificateFile(w http.ResponseWriter) {
 	// detect if file exists
 	var file *os.File
@@ -214,6 +215,8 @@ func createCertificateFile(w http.ResponseWriter) {
 
 }
 
+// getAPIKeys - this funtion read kubernetes secrets for configured
+// namespace and secret name
 func getAPIKeys(w http.ResponseWriter) {
 	println("[CONFIG] Reading Env variables")
 
@@ -243,6 +246,7 @@ func getAPIKeys(w http.ResponseWriter) {
 
 }
 
+// RandStringRunes generates random string for Image Name
 func RandStringRunes(n int) string {
 	b := make([]rune, n)
 	for i := range b {
@@ -251,6 +255,7 @@ func RandStringRunes(n int) string {
 	return string(b)
 }
 
+//Store to Google Clould Storage
 func write(client *storage.Client, bucket, objectName string, url string) (Media, error) {
 	println("writing media to cloud storage", objectName)
 	ctx := context.Background()
@@ -339,6 +344,7 @@ func attrs(client *storage.Client, bucket, object string) (*storage.ObjectAttrs,
 	// [END get_metadata]
 }
 
+//makePublic - this make media accessible publically
 func makePublic(client *storage.Client, bucket, object string) error {
 	ctx := context.Background()
 	// [START public]
@@ -350,6 +356,7 @@ func makePublic(client *storage.Client, bucket, object string) error {
 	return nil
 }
 
+//delete removes media from Google Storage
 func delete(client *storage.Client, bucket, object string) error {
 	ctx := context.Background()
 	// [START delete_file]
@@ -361,6 +368,8 @@ func delete(client *storage.Client, bucket, object string) error {
 	return nil
 }
 
+// createErrorResponse - this function forms a error reposne with
+// error message and http code
 func createErrorResponse(w http.ResponseWriter, message string, status int) {
 	errorJSON, _ := json.Marshal(&Error{
 		Status:  status,

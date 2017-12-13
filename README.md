@@ -4,8 +4,7 @@ API for Google Cloud Storage, to upload objects to your bucket, download objects
 
 ## API reference
 
-No external API called by this API
-
+ - [Google Storage API](https://cloud.google.com/storage/docs/json_api/v1/)
 
 ## Authentication
 
